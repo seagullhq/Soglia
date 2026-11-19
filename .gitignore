@@ -1,0 +1,20 @@
+# Local model + training data (supplied at runtime, not distributed)
+old_models/
+v6/
+train_data/
+
+# Secrets and generated artifacts under api/
+api/certs/
+api/dist/
+api/.env*
+!api/.env.example
+api/settings.json
+
+# Generated task-runner cache (any depth)
+.task/
+
+# Build and runtime artifacts (any depth)
+**/*.exe
+**/*.db*
+**/*.sqlite*
+**/*.backup

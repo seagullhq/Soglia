@@ -1,0 +1,16 @@
+# Local secrets — never commit these.
+.env*
+!.env.example
+settings.json
+certs/
+
+# Build output
+dist/
+
+# Generated task-runner cache
+.task/
+
+# Local database artifacts (SQLite legacy files + backups)
+*.db*
+*.sqlite*
+*.backup
