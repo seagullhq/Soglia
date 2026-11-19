@@ -151,8 +151,11 @@ function UsersPanel({ onChanged }: UsersPanelProps) {
   return (
     <section className="setup-card users-card">
       <div className="setup-card-head">
-        <h2>Users &amp; permissions</h2>
-        <span>admins only</span>
+        <div className="setup-card-head-main">
+          <span className="setup-index">06</span>
+          <h2>Users &amp; permissions</h2>
+        </div>
+        <span className="setup-tag setup-tag--admin">admins only</span>
       </div>
 
       {error && <p className="inline-error" role="alert">{error}</p>}
@@ -367,7 +370,7 @@ export function Setup({ onBack, onAccountChanged }: Props) {
   }
 
   return (
-    <div className="setup-screen">
+    <div className="setup-screen setup-page">
       <div className="setup-wrap">
         <header className="setup-header">
           <div className="auth-brand">
@@ -386,6 +389,7 @@ export function Setup({ onBack, onAccountChanged }: Props) {
         </header>
 
         <div className="setup-intro">
+          <p className="setup-eyebrow">Administration / Configuration</p>
           <h1>Setup</h1>
           <p>Change the console account, manage users, and edit the service configuration in one place.</p>
         </div>
@@ -400,8 +404,11 @@ export function Setup({ onBack, onAccountChanged }: Props) {
             <form id="setup-form" className="setup-form" onSubmit={(event) => void submit(event)}>
               <section className="setup-card">
                 <div className="setup-card-head">
-                  <h2>Console account</h2>
-                  <span>applies immediately</span>
+                  <div className="setup-card-head-main">
+                    <span className="setup-index">01</span>
+                    <h2>Console account</h2>
+                  </div>
+                  <span className="setup-tag setup-tag--now">applies immediately</span>
                 </div>
                 <div className="setup-grid">
                   <label>
@@ -422,8 +429,11 @@ export function Setup({ onBack, onAccountChanged }: Props) {
 
               <section className="setup-card">
                 <div className="setup-card-head">
-                  <h2>Database</h2>
-                  <span>applies after restart</span>
+                  <div className="setup-card-head-main">
+                    <span className="setup-index">02</span>
+                    <h2>Database</h2>
+                  </div>
+                  <span className="setup-tag setup-tag--restart">applies after restart</span>
                 </div>
                 <div className="setup-grid">
                   <label className="setup-wide">
@@ -439,8 +449,11 @@ export function Setup({ onBack, onAccountChanged }: Props) {
 
               <section className="setup-card">
                 <div className="setup-card-head">
-                  <h2>Service</h2>
-                  <span>applies after restart</span>
+                  <div className="setup-card-head-main">
+                    <span className="setup-index">03</span>
+                    <h2>Service</h2>
+                  </div>
+                  <span className="setup-tag setup-tag--restart">applies after restart</span>
                 </div>
                 <div className="setup-grid">
                   <label>
@@ -484,8 +497,11 @@ export function Setup({ onBack, onAccountChanged }: Props) {
 
               <section className="setup-card">
                 <div className="setup-card-head">
-                  <h2>Model thresholds</h2>
-                  <span>applies after restart</span>
+                  <div className="setup-card-head-main">
+                    <span className="setup-index">04</span>
+                    <h2>Model thresholds</h2>
+                  </div>
+                  <span className="setup-tag setup-tag--restart">applies after restart</span>
                 </div>
                 <div className="setup-grid">
                   <label>
@@ -532,13 +548,30 @@ export function Setup({ onBack, onAccountChanged }: Props) {
               </section>
 
               <section className="setup-card setup-status">
-                <div className="setup-card-head"><h2>Status</h2></div>
+                <div className="setup-card-head">
+                  <div className="setup-card-head-main">
+                    <span className="setup-index">05</span>
+                    <h2>Status</h2>
+                  </div>
+                </div>
                 <dl className="setup-status-grid">
-                  <div><dt>Database</dt><dd>{info.status.database}</dd></div>
-                  <div><dt>HTTPS</dt><dd>{info.status.https ? 'on' : 'off'}</dd></div>
-                  <div><dt>Model directory</dt><dd>{info.status.model_dir_exists ? 'found' : 'missing'}</dd></div>
-                  <div><dt>Worker</dt><dd>{info.status.worker_exists ? 'found' : 'missing'}</dd></div>
-                  <div><dt>Restart needed</dt><dd>{info.status.restart_required ? 'yes' : 'no'}</dd></div>
+                  <div><dt>Database</dt><dd><span className="status-pill status-pill--ok">{info.status.database}</span></dd></div>
+                  <div>
+                    <dt>HTTPS</dt>
+                    <dd><span className={`status-pill ${info.status.https ? 'status-pill--ok' : 'status-pill--muted'}`}>{info.status.https ? 'on' : 'off'}</span></dd>
+                  </div>
+                  <div>
+                    <dt>Model directory</dt>
+                    <dd><span className={`status-pill ${info.status.model_dir_exists ? 'status-pill--ok' : 'status-pill--bad'}`}>{info.status.model_dir_exists ? 'found' : 'missing'}</span></dd>
+                  </div>
+                  <div>
+                    <dt>Worker</dt>
+                    <dd><span className={`status-pill ${info.status.worker_exists ? 'status-pill--ok' : 'status-pill--bad'}`}>{info.status.worker_exists ? 'found' : 'missing'}</span></dd>
+                  </div>
+                  <div>
+                    <dt>Restart needed</dt>
+                    <dd><span className={`status-pill ${info.status.restart_required ? 'status-pill--warn' : 'status-pill--ok'}`}>{info.status.restart_required ? 'yes' : 'no'}</span></dd>
+                  </div>
                 </dl>
               </section>
 
