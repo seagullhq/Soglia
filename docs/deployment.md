@@ -62,15 +62,32 @@ Before the first deploy, create the model directory on the host and copy the
 `clean_blocklist.txt` are required; `config.json` and the larger files are
 optional but feed the UI's file sizes):
 
+Dokploy cleans up absolute host bind mounts on each deploy, so the model uses
+`../files/v6` relative to the compose file, i.e. the `files` directory of the
+Dokploy service (for a service cloned into
+`/etc/dokploy/compose/<service>/code`, upload to
+`/etc/dokploy/compose/<service>/files/v6/`):
+
 ```bash
-mkdir -p /srv/soglia/v6
-# rsync -avP /path/to/v6/ root@SERVER:/srv/soglia/v6/
-chmod -R a+rX /srv/soglia/v6
+mkdir -p /etc/dokploy/compose/<service>/files/v6
+# rsync -avP /path/to/v6/ root@SERVER:/etc/dokploy/compose/<service>/files/v6/
+chmod -R a+rX /etc/dokploy/compose/<service>/files/v6
 ```
 
 In Dokploy: create a **Compose** service pointing at the Git repo, leave the
-compose path as `./docker-compose.yml`, set `SOGLIA_USER`, `SOGLIA_PASSWORD`
-and `POSTGRES_PASSWORD` in the Environment tab, add the domain on port `8080`
-with HTTPS enabled, then deploy. Settings edited from the Setup page persist
-in the `soglia-settings` volume. Keep `POSTGRES_PASSWORD` URL-safe (letters
-and digits) because it is interpolated into the connection URL.
+compose path as `./docker-compose.yml`, then open the **Environment** tab and
+save the variables as plain lines (they are written to `.env`; compose
+interpolation reads that file):
+
+```
+SOGLIA_USER=admin
+SOGLIA_PASSWORD=choose-a-strong-password
+POSTGRES_PASSWORD=urlsafe123
+```
+
+Environment variables are not injected into containers automatically — the
+compose file already references each one with `${NAME}`, so saving them here
+and redeploying is enough. Add the domain on port `8080` with HTTPS enabled.
+Settings edited from the Setup page persist in the `soglia-settings` volume.
+Keep `POSTGRES_PASSWORD` URL-safe (letters and digits) because it is
+interpolated into the connection URL.

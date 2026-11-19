@@ -1,6 +1,7 @@
 # Dokploy deployment: Traefik terminates TLS, the API serves HTTP on :8080.
-# Set SOGLIA_PASSWORD, POSTGRES_PASSWORD and SOGLIA_USER in Dokploy's Environment tab.
-# Upload the v6 model to /srv/soglia/v6 on the host before the first deploy.
+# In Dokploy's Environment tab set SOGLIA_PASSWORD, POSTGRES_PASSWORD and SOGLIA_USER.
+# Upload the v6 model to ../files/v6 relative to this compose file
+# (the service's "files" directory) before the first deploy.
 
 name: soglia
 
@@ -36,7 +37,7 @@ services:
     expose:
       - "8080"
     volumes:
-      - /srv/soglia/v6:/app/v6:ro
+      - ../files/v6:/app/v6:ro
       - soglia-settings:/app/settings
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
