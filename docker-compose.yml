@@ -21,6 +21,16 @@ services:
       timeout: 3s
       retries: 20
 
+  # TEMPORARY: remove this service once the model has been uploaded.
+  # It only exists so Dokploy's Docker -> Containers -> Browse Files UI can
+  # write into ../files/v6 without SSH access to the host.
+  uploader:
+    image: docker.io/library/busybox:1.36
+    restart: "no"
+    command: ["sleep", "infinity"]
+    volumes:
+      - ../files/v6:/srv/v6
+
   api:
     build:
       context: .

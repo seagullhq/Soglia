@@ -84,6 +84,22 @@ It checks the four required files, uploads every file from the local `v6/`
 directory, fixes permissions and prints the remote listing. Override
 `-ServiceName` or `-ModelPath` if needed.
 
+If you have no SSH access, the root compose file includes a temporary
+`uploader` service (busybox, `sleep infinity`) that bind-mounts the same
+`../files/v6` directory at `/srv/v6`. After deploying once, use Dokploy's
+browser-only file explorer:
+
+1. **Docker → Containers** → select the `...-uploader-1` container.
+2. **Actions → Browse Files** → open `/srv/v6`.
+3. Upload the model files from your local `v6/` folder. Binary uploads work;
+   the text editor's size cap does not apply to uploads.
+4. Remove the `uploader` service from `docker-compose.yml`, commit/push and
+   redeploy so it is not left running in production.
+
+The `api` service may be unhealthy during this step (the model is not there
+yet); that is expected. Once the files are in `/srv/v6`, redeploy and it will
+start.
+
 In Dokploy: create a **Compose** service pointing at the Git repo, leave the
 compose path as `./docker-compose.yml`, then open the **Environment** tab and
 save the variables as plain lines (they are written to `.env`; compose
