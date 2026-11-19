@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -24,6 +25,9 @@ type Options struct {
 	SecureCookie bool
 	TLSCert      string
 	TLSKey       string
+	// TerminalEnabled opts into the read-only diagnostic terminal. Off by default:
+	// an operator must explicitly enable it with -terminal or SOGLIA_TERMINAL_ENABLED.
+	TerminalEnabled bool
 }
 
 func (o Options) TLSEnabled() bool {
@@ -52,6 +56,19 @@ func OrDefault(value, fallback string) string {
 	return fallback
 }
 
+// EnvBool parses a boolean environment variable, falling back when unset or invalid.
+func EnvBool(key string, fallback bool) bool {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return fallback
+	}
+	return value
+}
+
 // ParseOptions resolves flags, environment variables and the settings file,
 // then auto-detects worker.py and the v6 model relative to the binary/CWD.
 func ParseOptions() Options {
@@ -64,6 +81,7 @@ func ParseOptions() Options {
 	flag.StringVar(&opts.DBURL, "db-url", EnvOr("SOGLIA_DATABASE_URL", EnvOr("DATABASE_URL", OrDefault(saved.DatabaseURL, "postgres://soglia:soglia@localhost:5432/soglia?sslmode=verify-full&sslrootcert=certs/ca.crt"))),
 		"PostgreSQL connection URL (or set DATABASE_URL / SOGLIA_DATABASE_URL)")
 	flag.BoolVar(&opts.SecureCookie, "secure-cookie", saved.SecureCookie, "add Secure to session cookies (automatic when HTTPS is enabled)")
+	flag.BoolVar(&opts.TerminalEnabled, "terminal", EnvBool("SOGLIA_TERMINAL_ENABLED", false), "enable the read-only diagnostic terminal (off by default)")
 	flag.StringVar(&opts.TLSCert, "tls-cert", EnvOr("SOGLIA_TLS_CERT", ""), "TLS certificate file; together with -tls-key enables HTTPS")
 	flag.StringVar(&opts.TLSKey, "tls-key", EnvOr("SOGLIA_TLS_KEY", ""), "TLS private key file; together with -tls-cert enables HTTPS")
 	flag.Parse()

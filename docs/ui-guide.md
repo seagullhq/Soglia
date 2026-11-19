@@ -14,6 +14,13 @@ checker and recent checks together), **Review** (the moderator workspace),
 user's role, and every API route enforces the same permissions server-side —
 hiding a button is not the only safeguard.
 
+The console adapts to the viewport. On tablets and phones the long sidebar folds
+into a compact header with a **Service details** toggle, multi-column workspaces
+stack into one column, and the terminal modal scales to the available width and
+height. A **Service info** shortcut sits next to the toggle so that page stays
+reachable while the sidebar is collapsed. Desktop spacing and styling are
+unchanged.
+
 ## Roles and permissions
 
 | Role | Permissions |
@@ -66,16 +73,21 @@ directly in this tab. Open it with
 works). See [`GET /files`](api-reference.md#get-files) for the safeguards applied
 to file contents.
 
-The **Terminal** button in the top bar opens a fixed-size modal shell. Commands
-run on the machine hosting the API as the API process user; `cd` persists
-between commands and ↑ / ↓ walks command history (kept across modal reopens and
-page reloads). `clear` / `cls` or Ctrl+L empties the output, Ctrl+C stops a
-running command (or clears the input line), **Copy** copies the whole transcript,
-and Esc or a backdrop click closes the modal. The **Stop** button replaces **Run**
-while a command is executing and interrupts the command and its child processes;
-long-running commands are also capped at 15 seconds. This is full shell access
-for signed-in operators — it is not restricted by the file browser's secret
-masking, so treat the session credential as an administrator credential.
+The **Terminal** button in the top bar appears only when the API has been
+started with the diagnostic terminal enabled; by default the endpoint does not
+exist and the button is hidden. When enabled, it opens a fixed-size modal for
+**read-only** diagnostics: a small allow-list of system utilities, no shell, no
+pipes or redirects, and file access confined to `/app`. You cannot edit files,
+install packages or control Docker from it. `cd` persists between commands and
+↑ / ↓ walks command history (kept across modal reopens and page reloads).
+`clear` / `cls` or Ctrl+L empties the output, Ctrl+C stops a running command (or
+clears the input line), **Copy** copies the whole transcript, and Esc or a
+backdrop click closes the modal. The **Stop** button replaces **Run** while a
+command is executing and interrupts it and its child processes; commands are
+capped at 15 seconds and 64 KB of output, with one command per session at a
+time. Known secret values are scrubbed from output. See
+[`POST /terminal`](api-reference.md#post-terminal) for the full list of
+safeguards.
 
 For development with hot reload:
 

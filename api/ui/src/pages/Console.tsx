@@ -531,8 +531,8 @@ function TerminalModal({
         </div>
 
         <p className="terminal-note">
-          Commands run on the machine hosting the API. Signed-in access only.
-          ↑ / ↓ history · Ctrl+C stop · Ctrl+L clear.
+          Read-only diagnostics on the API host: allow-listed commands, confined
+          to /app. ↑ / ↓ history · Ctrl+C stop · Ctrl+L clear.
         </p>
 
         <div className="terminal-screen" ref={outputRef} onScroll={onScroll}>
@@ -1032,6 +1032,7 @@ export default function App() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [offline, setOffline] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [text, setText] = useState('')
   const [verdict, setVerdict] = useState<Verdict | null>(null)
@@ -1332,133 +1333,150 @@ export default function App() {
           </div>
         </div>
 
-        <section className="side-section">
-          <h2>Service</h2>
-          <div className="status-line">
-            <span className={`status-dot ${serviceOnline ? 'online' : 'offline'}`} />
-            <span>{serviceOnline ? 'API reachable' : 'API unreachable'}</span>
-          </div>
-          <div className="side-row">
-            <span>Model</span>
-            <span className="mono">{config?.model_dir ? basename(config.model_dir) : '—'}</span>
-          </div>
-          <div className="side-row">
-            <span>Worker</span>
-            <span>{serviceOnline ? 'running' : 'stopped'}</span>
-          </div>
-          <button className="link-button" onClick={() => void refreshStatus()} disabled={refreshing}>
-            <RefreshIcon /> {refreshing ? 'Checking…' : 'Refresh status'}
+        <div className="sidebar-mobile-actions">
+          <button
+            className="sidebar-toggle"
+            type="button"
+            aria-expanded={sidebarOpen}
+            aria-controls="sidebar-details"
+            onClick={() => setSidebarOpen((open) => !open)}
+          >
+            {sidebarOpen ? 'Hide details' : 'Service details'}
           </button>
-        </section>
+          <button className="link-button sidebar-info-link" type="button" onClick={() => setView('service')}>
+            Service info
+          </button>
+        </div>
 
-        <section className="side-section">
-          <h2>Model</h2>
-          <dl className="rule-list">
-            <div>
-              <dt>Architecture</dt>
-              <dd className="mono">{spec(config?.model?.architecture)}</dd>
+        <div id="sidebar-details" className={`sidebar-details${sidebarOpen ? ' is-open' : ''}`}>
+          <section className="side-section">
+            <h2>Service</h2>
+            <div className="status-line">
+              <span className={`status-dot ${serviceOnline ? 'online' : 'offline'}`} />
+              <span>{serviceOnline ? 'API reachable' : 'API unreachable'}</span>
             </div>
-            <div>
-              <dt>Task</dt>
-              <dd>{spec(config?.model?.task)}</dd>
+            <div className="side-row">
+              <span>Model</span>
+              <span className="mono">{config?.model_dir ? basename(config.model_dir) : '—'}</span>
             </div>
-            <div>
-              <dt>Layers / heads</dt>
-              <dd className="mono">
-                {typeof config?.model?.layers === 'number' && typeof config?.model?.heads === 'number'
-                  ? `${config.model.layers} / ${config.model.heads}`
-                  : '—'}
-              </dd>
+            <div className="side-row">
+              <span>Worker</span>
+              <span>{serviceOnline ? 'running' : 'stopped'}</span>
             </div>
-            <div>
-              <dt>Hidden size</dt>
-              <dd className="mono">{spec(config?.model?.hidden_size)}</dd>
-            </div>
-            <div>
-              <dt>Vocabulary</dt>
-              <dd className="mono">{spec(config?.model?.vocab_size)}</dd>
-            </div>
-            <div>
-              <dt>Input limit</dt>
-              <dd className="mono">{typeof config?.max_tokens === 'number' ? `${config.max_tokens} tokens` : '—'}</dd>
-            </div>
-            <div>
-              <dt>Built with</dt>
-              <dd className="mono">
-                {config?.model?.transformers_version ? `transformers ${config.model.transformers_version}` : '—'}
-              </dd>
-            </div>
-          </dl>
-        </section>
-
-        <section className="side-section">
-          <h2>Decision path</h2>
-          <ol className="flow">
-            <li>
-              <span className="flow-index mono">01</span>
-              <span><strong>Normalize</strong><small>homoglyphs, leetspeak, spacing</small></span>
-            </li>
-            <li>
-              <span className="flow-index mono">02</span>
-              <span><strong>Blocklist</strong><small>{count(config?.blocklist_size)} exact terms</small></span>
-            </li>
-            <li>
-              <span className="flow-index mono">03</span>
-              <span><strong>Transformer</strong><small>temperature {fixed(config?.temperature, 4)}</small></span>
-            </li>
-          </ol>
-          <div className="range-list">
-            <div>
-              <span><i className="range-dot dot-allow" />allow</span>
-              <span className="mono">below {fixed(config?.review_threshold, 2)}</span>
-            </div>
-            <div>
-              <span><i className="range-dot dot-review" />review</span>
-              <span className="mono">{fixed(config?.review_threshold, 2)} to {fixed(config?.block_threshold, 2)}</span>
-            </div>
-            <div>
-              <span><i className="range-dot dot-block" />block</span>
-              <span className="mono">from {fixed(config?.block_threshold, 2)}</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="side-section">
-          <h2>Model files</h2>
-          <ul className="file-list">
-            {(Array.isArray(config?.files) ? config.files : []).map((file) => (
-              <li key={file.name} className="file-item">
-                <button
-                  className="file-link"
-                  title={`Open ${file.name}`}
-                  onClick={() => {
-                    const base = config?.model_dir?.replace(/[\\/]+$/, '') ?? ''
-                    openFiles(base ? `${base}/${file.name}` : file.name)
-                  }}
-                >
-                  <span className="file-name mono">{file.name}</span>
-                  <span className="file-size mono">{formatBytes(file.bytes)}</span>
-                </button>
-              </li>
-            ))}
-            {!config && <li className="file-placeholder">—</li>}
-          </ul>
-        </section>
-
-        <section className="side-section side-api">
-          <h2>API</h2>
-          <div className="side-api-links">
-            <button className="side-link" onClick={() => setView('service')}>
-              <span>Service info</span><span aria-hidden="true">→</span>
+            <button className="link-button" onClick={() => void refreshStatus()} disabled={refreshing}>
+              <RefreshIcon /> {refreshing ? 'Checking…' : 'Refresh status'}
             </button>
-            {permissions.includes('setup') && (
-              <button className="side-link" onClick={() => setView('setup')}>
-                <span>Open setup</span><span aria-hidden="true">→</span>
+          </section>
+
+          <section className="side-section">
+            <h2>Model</h2>
+            <dl className="rule-list">
+              <div>
+                <dt>Architecture</dt>
+                <dd className="mono">{spec(config?.model?.architecture)}</dd>
+              </div>
+              <div>
+                <dt>Task</dt>
+                <dd>{spec(config?.model?.task)}</dd>
+              </div>
+              <div>
+                <dt>Layers / heads</dt>
+                <dd className="mono">
+                  {typeof config?.model?.layers === 'number' && typeof config?.model?.heads === 'number'
+                    ? `${config.model.layers} / ${config.model.heads}`
+                    : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Hidden size</dt>
+                <dd className="mono">{spec(config?.model?.hidden_size)}</dd>
+              </div>
+              <div>
+                <dt>Vocabulary</dt>
+                <dd className="mono">{spec(config?.model?.vocab_size)}</dd>
+              </div>
+              <div>
+                <dt>Input limit</dt>
+                <dd className="mono">{typeof config?.max_tokens === 'number' ? `${config.max_tokens} tokens` : '—'}</dd>
+              </div>
+              <div>
+                <dt>Built with</dt>
+                <dd className="mono">
+                  {config?.model?.transformers_version ? `transformers ${config.model.transformers_version}` : '—'}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="side-section">
+            <h2>Decision path</h2>
+            <ol className="flow">
+              <li>
+                <span className="flow-index mono">01</span>
+                <span><strong>Normalize</strong><small>homoglyphs, leetspeak, spacing</small></span>
+              </li>
+              <li>
+                <span className="flow-index mono">02</span>
+                <span><strong>Blocklist</strong><small>{count(config?.blocklist_size)} exact terms</small></span>
+              </li>
+              <li>
+                <span className="flow-index mono">03</span>
+                <span><strong>Transformer</strong><small>temperature {fixed(config?.temperature, 4)}</small></span>
+              </li>
+            </ol>
+            <div className="range-list">
+              <div>
+                <span><i className="range-dot dot-allow" />allow</span>
+                <span className="mono">below {fixed(config?.review_threshold, 2)}</span>
+              </div>
+              <div>
+                <span><i className="range-dot dot-review" />review</span>
+                <span className="mono">{fixed(config?.review_threshold, 2)} to {fixed(config?.block_threshold, 2)}</span>
+              </div>
+              <div>
+                <span><i className="range-dot dot-block" />block</span>
+                <span className="mono">from {fixed(config?.block_threshold, 2)}</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="side-section">
+            <h2>Model files</h2>
+            <ul className="file-list">
+              {(Array.isArray(config?.files) ? config.files : []).map((file) => (
+                <li key={file.name} className="file-item">
+                  <button
+                    className="file-link"
+                    title={`Open ${file.name}`}
+                    onClick={() => {
+                      const base = config?.model_dir?.replace(/[\\/]+$/, '') ?? ''
+                      openFiles(base ? `${base}/${file.name}` : file.name)
+                    }}
+                  >
+                    <span className="file-name mono">{file.name}</span>
+                    <span className="file-size mono">{formatBytes(file.bytes)}</span>
+                  </button>
+                </li>
+              ))}
+              {!config && <li className="file-placeholder">—</li>}
+            </ul>
+          </section>
+
+          <section className="side-section side-api">
+            <h2>API</h2>
+            <div className="side-api-links">
+              <button className="side-link" onClick={() => setView('service')}>
+                <span>Service info</span><span aria-hidden="true">→</span>
               </button>
-            )}
-          </div>
-          <p className="side-note side-api-note">Go HTTP service · Python inference worker</p>
-        </section>
+              {permissions.includes('setup') && (
+                <button className="side-link" onClick={() => setView('setup')}>
+                  <span>Open setup</span><span aria-hidden="true">→</span>
+                </button>
+              )}
+            </div>
+            <p className="side-note side-api-note">Go HTTP service · Python inference worker</p>
+          </section>
+        </div>
       </aside>
 
       <main className="main">
@@ -1478,7 +1496,7 @@ export default function App() {
               {serviceOnline ? 'live' : 'offline'}
             </div>
             <span className="session-user mono" title={`Signed in as ${user} (${role})`}>{user} · {role}</span>
-            {permissions.includes('terminal') && (
+            {permissions.includes('terminal') && config?.terminal_enabled && (
               <button className="terminal-button" onClick={() => setTerminalOpen(true)}>Terminal</button>
             )}
             {permissions.includes('setup') && (

@@ -241,6 +241,13 @@ func sessionToken(r *http.Request) string {
 	return cookie.Value
 }
 
+// SessionKey returns a non-reversible identifier for the current session. It
+// lets handlers bind state (such as an in-flight command) to one login without
+// keeping the raw cookie value in memory or in logs.
+func SessionKey(r *http.Request) string {
+	return SHA256Hex(sessionToken(r))
+}
+
 func (a *Manager) setSessionCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,

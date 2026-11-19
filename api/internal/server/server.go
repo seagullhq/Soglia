@@ -5,7 +5,6 @@ package server
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -29,10 +28,13 @@ type api struct {
 	store  *store.Store
 	auth   *auth.Manager
 
-	// terminalRunning lets /terminal/cancel interrupt an in-flight shell
-	// command. Keys are client-generated ids so concurrent commands stay separate.
+	// Terminal state is only used when the opt-in diagnostic terminal is
+	// enabled. Commands are bound to the session that started them, and usage
+	// is tracked per session so one account cannot monopolise the endpoint.
 	terminalMu      sync.Mutex
-	terminalRunning map[string]context.CancelFunc
+	terminalRunning map[string]runningTerminal // session\x00client id -> command
+	terminalActive  map[string]int             // session -> running commands
+	terminalUsage   map[string]terminalUsage   // session -> rate-limit window
 }
 
 // New builds the fully routed API handler, including auth middleware, HSTS and
@@ -44,7 +46,9 @@ func New(w *worker.Client, opts config.Options, db *store.Store, mgr *auth.Manag
 		model:           loadModelConfig(opts.ModelDir),
 		store:           db,
 		auth:            mgr,
-		terminalRunning: make(map[string]context.CancelFunc),
+		terminalRunning: make(map[string]runningTerminal),
+		terminalActive:  make(map[string]int),
+		terminalUsage:   make(map[string]terminalUsage),
 	}
 
 	mux := http.NewServeMux()
@@ -66,8 +70,17 @@ func New(w *worker.Client, opts config.Options, db *store.Store, mgr *auth.Manag
 	// through to the root handler and surface as a 404 in the console.
 	mux.Handle("/files", mgr.RequirePerm(auth.PermFiles, http.HandlerFunc(app.handleFiles)))
 	mux.Handle("/files/", mgr.RequirePerm(auth.PermFiles, http.HandlerFunc(app.handleFiles)))
-	mux.Handle("/terminal", mgr.RequirePerm(auth.PermTerminal, http.HandlerFunc(app.handleTerminal)))
-	mux.Handle("/terminal/cancel", mgr.RequirePerm(auth.PermTerminal, http.HandlerFunc(app.handleTerminalCancel)))
+	if opts.TerminalEnabled {
+		mux.Handle("/terminal", mgr.RequirePerm(auth.PermTerminal, http.HandlerFunc(app.handleTerminal)))
+		mux.Handle("/terminal/cancel", mgr.RequirePerm(auth.PermTerminal, http.HandlerFunc(app.handleTerminalCancel)))
+		slog.Info("diagnostic terminal enabled", "mode", "read-only allow-list")
+	} else {
+		// Register explicit 404s so POSTs cannot fall through to the UI's
+		// catch-all handler and report a misleading 405.
+		mux.Handle("/terminal", http.NotFoundHandler())
+		mux.Handle("/terminal/cancel", http.NotFoundHandler())
+		slog.Info("diagnostic terminal disabled", "enable_with", "SOGLIA_TERMINAL_ENABLED=true")
+	}
 	mux.Handle("/moderate", mgr.RequirePerm(auth.PermModerate, http.HandlerFunc(app.handleModerate)))
 	mux.Handle("/moderate/batch", mgr.RequirePerm(auth.PermModerate, http.HandlerFunc(app.handleBatch)))
 
@@ -96,34 +109,38 @@ func (a *api) handleRoot(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "not found")
 		return
 	}
+	endpoints := map[string]string{
+		"GET  /info":           "this service description",
+		"GET  /health":         "worker status",
+		"GET  /config":         "model settings",
+		"GET  /stats":          "usage counters",
+		"GET  /history":        "recent checks from the database",
+		"DELETE /history":      "clear check history",
+		"GET  /reviews":        "review queue with decisions",
+		"POST /reviews":        `{"id": 1, "decision": "allow", "note": "..."}`,
+		"DELETE /reviews?id=1": "reopen a review by clearing its decision",
+		"GET  /db":             "database tables and row counts",
+		"GET  /db/table":       "?name=checks rows from one table",
+		"POST /db/query":       `{"sql": "SELECT ..."}`,
+		"GET  /users":          "console accounts (admin only)",
+		"POST /users":          `{"username": "mod", "password": "...", "role": "moderator"}`,
+		"PUT  /users":          `{"username": "mod", "role": "viewer", "enabled": true}`,
+		"DELETE /users":        "?username=mod remove an account",
+		"GET  /setup":          "account and service settings",
+		"PUT  /setup":          "update setup",
+		"GET  /files":          "server filesystem browser",
+		"POST /moderate":       `{"text": "message"}`,
+		"POST /moderate/batch": `{"texts": ["message", ...]}`,
+	}
+	if a.opts.TerminalEnabled {
+		endpoints["POST /terminal"] = `{"command": "ls -la", "cwd": "/app"} (read-only)`
+		endpoints["POST /terminal/cancel"] = `{"id": "..."}`
+	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"service": "profanity-filter-api",
-		"model":   a.opts.ModelDir,
-		"endpoints": map[string]string{
-			"GET  /info":            "this service description",
-			"GET  /health":          "worker status",
-			"GET  /config":          "model settings",
-			"GET  /stats":           "usage counters",
-			"GET  /history":         "recent checks from the database",
-			"DELETE /history":       "clear check history",
-			"GET  /reviews":         "review queue with decisions",
-			"POST /reviews":         `{"id": 1, "decision": "allow", "note": "..."}`,
-			"DELETE /reviews?id=1":  "reopen a review by clearing its decision",
-			"GET  /db":              "database tables and row counts",
-			"GET  /db/table":        "?name=checks rows from one table",
-			"POST /db/query":        `{"sql": "SELECT ..."}`,
-			"GET  /users":           "console accounts (admin only)",
-			"POST /users":           `{"username": "mod", "password": "...", "role": "moderator"}`,
-			"PUT  /users":           `{"username": "mod", "role": "viewer", "enabled": true}`,
-			"DELETE /users":         "?username=mod remove an account",
-			"GET  /setup":           "account and service settings",
-			"PUT  /setup":           "update setup",
-			"GET  /files":           "server filesystem browser",
-			"POST /terminal":        `{"command": "...", "cwd": "..."}`,
-			"POST /terminal/cancel": `{"id": "..."}`,
-			"POST /moderate":        `{"text": "message"}`,
-			"POST /moderate/batch":  `{"texts": ["message", ...]}`,
-		},
+		"service":          "profanity-filter-api",
+		"model":            a.opts.ModelDir,
+		"terminal_enabled": a.opts.TerminalEnabled,
+		"endpoints":        endpoints,
 	})
 }
 
@@ -151,7 +168,10 @@ func (a *api) handleConfig(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusMethodNotAllowed, "GET required")
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, a.model)
+	// Copy so the opt-in flag can be reported without mutating the shared config.
+	response := *a.model
+	response.TerminalEnabled = a.opts.TerminalEnabled
+	httpx.WriteJSON(w, http.StatusOK, response)
 }
 
 type modelDetails struct {
@@ -170,6 +190,7 @@ type modelFile struct {
 }
 
 type modelConfig struct {
+	TerminalEnabled bool         `json:"terminal_enabled"`
 	ModelDir        string       `json:"model_dir"`
 	Temperature     float64      `json:"temperature"`
 	BlockThreshold  float64      `json:"block_threshold"`

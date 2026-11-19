@@ -29,6 +29,7 @@ export interface ModelFile {
 }
 
 export interface Config {
+  terminal_enabled: boolean
   model_dir: string
   temperature: number
   block_threshold: number

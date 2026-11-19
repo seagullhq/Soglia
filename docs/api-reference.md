@@ -234,17 +234,45 @@ Safeguards, because this endpoint can read anything the API process can:
 
 ### `POST /terminal`
 
-Protected endpoint used by the UI's Terminal modal:
+**Disabled by default.** The routes exist only when the API starts with
+`-terminal` or `SOGLIA_TERMINAL_ENABLED=true`; otherwise they return 404. They
+also require the `terminal` permission (admin only) and a valid session. This
+is a read-only diagnostics endpoint, not a shell: it cannot modify the
+container or run arbitrary programs.
 
 ```json
 {"id":"client-generated-id","command":"ls -la","cwd":"/app"}
 ```
 
 Returns `{ "output": "...", "cwd": "/app", "code": 0 }`. `cwd` is optional and
-defaults to the API's working directory. The server appends a marker to the
-shell script so `cd` in one command is reflected in the returned `cwd` and can
-be passed back with the next command. `id` is optional but should be a unique
-value per command so it can be cancelled with `POST /terminal/cancel`.
+defaults to `/app`. `cd` is handled by the server without starting a process;
+pass the returned `cwd` with the next command to persist it. `id` is optional
+but should be unique per command so it can be cancelled.
+
+Safeguards:
+
+- **No shell.** The command is tokenised, not interpreted. Pipes, redirects,
+  `;`, `&`, `$()`, backticks, newlines and other shell operators are rejected.
+  Quotes only group words.
+- **Allow-list.** Only trusted, read-only system utilities are accepted
+  (`ls`, `cat`, `grep`, `find`, `ps`, `df`, `du`, `stat`, `head`, `tail`, …),
+  resolved from `/usr/bin` or `/bin` and rejected if writable by other users.
+  Interpreters, editors, package managers, network tools and Docker/Podman are
+  never available. The endpoint is supported inside the Linux container only.
+- **Read-only arguments.** Options that can execute or write (`find -exec`,
+  `-delete`, `-fprint`, `tail -f`, …) are rejected, as are locked files
+  (keys, `.env`, credential stores). File arguments are resolved with symlinks
+  and must stay inside `/app`.
+- **No inherited secrets.** Child processes get a minimal environment
+  (`PATH`, locale, `TERM`, `HOME`); known secret values are also scrubbed from
+  command output and audit records.
+- **Bounded.** 8 KB command, 15 s timeout, and 64 KB of output captured while
+  it streams (the command is killed as soon as the cap is hit). One command per
+  session at a time and 30 requests/minute/session.
+
+Every accepted or rejected command is audit-logged with the user, a hashed
+session identifier, client IP, command, resolved program and arguments, working
+directory, exit code, output size, duration and outcome.
 
 ### `POST /terminal/cancel`
 
@@ -252,14 +280,8 @@ value per command so it can be cancelled with `POST /terminal/cancel`.
 {"id":"client-generated-id"}
 ```
 
-Returns `{ "cancelled": true }` when a matching command was running and
-`{ "cancelled": false }` when it had already finished. Cancelling kills the
-command's whole process group; the `/terminal` request then returns with
-`code: 130` and `output` ending in `command cancelled`. Both endpoints require
-a session.
-
-Limits: session required; 8 KB command length; 15 s timeout; 64 KB output cap.
-`sh -c` is used on Linux/macOS and `cmd /C` on Windows. There is no command
-allow-list — the endpoint intentionally gives a signed-in operator full shell
-access with the privileges of the API process. Every command is audit-logged
-with the user, command, working directory, exit code and duration.
+Returns `{ "cancelled": true }` only when a command with that id is running in
+the **same session**, otherwise `{ "cancelled": false }` (the Stop button stays
+idempotent). Cancelling kills the command's whole process group; the
+`/terminal` request then returns with `code: 130` and output ending in
+`command cancelled`.

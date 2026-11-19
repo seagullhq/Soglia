@@ -117,3 +117,10 @@ and redeploying is enough. Add the domain on port `8080` with HTTPS enabled.
 Settings edited from the Setup page persist in the `soglia-settings` volume.
 Keep `POSTGRES_PASSWORD` URL-safe (letters and digits) because it is
 interpolated into the connection URL.
+
+Leave the diagnostic terminal off in production — it is disabled by default,
+and the Terminal button is hidden in the console. For temporary troubleshooting,
+add `SOGLIA_TERMINAL_ENABLED=true` to the Environment tab and redeploy; remove
+it and redeploy again afterwards. Even when enabled it is read-only: an
+allow-list of system utilities, no shell, `/app` confinement and no access to
+the host or Docker socket.

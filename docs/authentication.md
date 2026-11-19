@@ -47,5 +47,7 @@ Protected, `moderate` permission (admin, moderator): `DELETE /history`.
 
 Protected, `review` permission (admin, moderator): `/reviews`.
 
-Protected, admin only: `/db`, `/db/table`, `/db/query`, `/files`, `/terminal`,
-`/terminal/cancel`, `/setup`, `/users`.
+Protected, admin only: `/db`, `/db/table`, `/db/query`, `/files`, `/setup`,
+`/users`. The `/terminal` and `/terminal/cancel` routes are registered only
+when the read-only diagnostic terminal is explicitly enabled; otherwise they
+answer 404.
