@@ -74,6 +74,16 @@ mkdir -p /etc/dokploy/compose/<service>/files/v6
 chmod -R a+rX /etc/dokploy/compose/<service>/files/v6
 ```
 
+On Windows, `scripts/upload-model.ps1` does the same via `scp`:
+
+```powershell
+.\scripts\upload-model.ps1 -Server root@192.0.2.10
+```
+
+It checks the four required files, uploads every file from the local `v6/`
+directory, fixes permissions and prints the remote listing. Override
+`-ServiceName` or `-ModelPath` if needed.
+
 In Dokploy: create a **Compose** service pointing at the Git repo, leave the
 compose path as `./docker-compose.yml`, then open the **Environment** tab and
 save the variables as plain lines (they are written to `.env`; compose
