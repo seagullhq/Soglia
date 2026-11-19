@@ -37,8 +37,8 @@ logins from the same IP cause a 5-minute lockout. Each user can change their own
 username/password from the **Setup** page; changing a password invalidates only
 that account's sessions.
 
-Public endpoints: `/health`, `/`, `/ui/`, `/auth/login`, `/auth/logout`,
-`/auth/me`.
+Public endpoints: `/` (the console), `/ui/` (legacy alias), `/info` (service
+description), `/health`, `/auth/login`, `/auth/logout`, `/auth/me`.
 
 Protected, any signed-in account: `/config`, `/stats`, `/history` (GET),
 `/moderate`, `/moderate/batch`.

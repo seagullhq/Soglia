@@ -48,7 +48,7 @@ func New(w *worker.Client, opts config.Options, db *store.Store, mgr *auth.Manag
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", app.handleRoot)
+	mux.HandleFunc("/info", app.handleRoot)
 	mux.HandleFunc("/health", app.handleHealth)
 	mux.HandleFunc("/auth/login", mgr.HandleLogin)
 	mux.HandleFunc("/auth/logout", mgr.HandleLogout)
@@ -76,15 +76,23 @@ func New(w *worker.Client, opts config.Options, db *store.Store, mgr *auth.Manag
 		filepath.Join(opts.ModelDir, "..", "api", "ui", "dist"),
 		filepath.Join("ui", "dist"),
 	); webDir != "" {
-		mux.Handle("/ui/", uiHandler(webDir))
-		slog.Info("management UI available", "url", "/ui/")
+		// The console owns the site root. /ui/ stays as an alias so existing
+		// bookmarks and cached HTML keep working.
+		ui := uiHandler(webDir)
+		mux.Handle("/", ui)
+		mux.Handle("/ui/", ui)
+		slog.Info("management UI available", "url", "/")
+	} else {
+		mux.HandleFunc("/", app.handleRoot)
 	}
 
 	return httpx.WithHSTS(httpx.WithCORS(mux))
 }
 
+// handleRoot serves the small JSON service description. It is reachable at
+// /info; if no UI build is present it also answers at /.
 func (a *api) handleRoot(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
+	if r.URL.Path != "/" && r.URL.Path != "/info" {
 		httpx.WriteError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -92,6 +100,7 @@ func (a *api) handleRoot(w http.ResponseWriter, r *http.Request) {
 		"service": "profanity-filter-api",
 		"model":   a.opts.ModelDir,
 		"endpoints": map[string]string{
+			"GET  /info":            "this service description",
 			"GET  /health":          "worker status",
 			"GET  /config":          "model settings",
 			"GET  /stats":           "usage counters",
@@ -244,8 +253,8 @@ func loadModelConfig(dir string) *modelConfig {
 	return cfg
 }
 
-// uiHandler serves the built React app under /ui/. Unknown paths fall back to
-// index.html so client-side routing keeps working.
+// uiHandler serves the built React app at the site root. /ui/ is accepted as
+// an alias, and unknown paths fall back to index.html for client-side routing.
 func uiHandler(root string) http.Handler {
 	index := filepath.Join(root, "index.html")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -253,12 +262,18 @@ func uiHandler(root string) http.Handler {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		rel := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/ui"), "/")
+		rel := strings.TrimPrefix(r.URL.Path, "/")
+		if rel == "ui" {
+			rel = ""
+		} else if strings.HasPrefix(rel, "ui/") {
+			rel = strings.TrimPrefix(rel, "ui/")
+		}
 		if rel == "" {
 			rel = "index.html"
 		}
 		target := filepath.Join(root, filepath.Clean(rel))
-		if strings.HasPrefix(target, "..") || !strings.HasPrefix(target, filepath.Clean(root)+string(os.PathSeparator)) && target != index {
+		cleanRoot := filepath.Clean(root)
+		if target != cleanRoot && !strings.HasPrefix(target, cleanRoot+string(os.PathSeparator)) {
 			http.NotFound(w, r)
 			return
 		}

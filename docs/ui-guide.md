@@ -4,7 +4,7 @@
 
 Commands on this page assume `api/` as the working directory unless stated otherwise.
 
-The React console lives in `ui/` and is served at **https://localhost:8080/ui/**
+The React console lives in `ui/` and is served at **https://localhost:8080/**
 when `ui/dist` exists (the built assets are included here). It shows service
 state, model architecture and file sizes, the decision path and thresholds, a
 single-message checker with a probability scale, a batch checker, and the last
@@ -38,7 +38,7 @@ masked as `********`. Signed-in admins can also run `DELETE` statements: the UI
 asks for confirmation, shows the deleted-row count, and refreshes table counts,
 stats, reviews and history. Other writes (`INSERT`, `UPDATE`, `DROP`, etc.) and
 multi-statement input are rejected. Open it directly with
-`https://localhost:8080/ui/?v=6&tab=db`.
+`https://localhost:8080/?v=6&tab=db`.
 
 Messages the model places in the review band appear in the dedicated **Review**
 tab, laid out as a compact queue on the left and a detail pane on the right.
@@ -54,7 +54,7 @@ The pending count appears on the tab itself and in the **Awaiting review** stat
 card. The selected tab is written to the URL, so a reload returns
 to the Review workspace. Queue items and decisions are stored in Postgres and
 survive restarts and **Clear history**. Open it directly with
-`https://localhost:8080/ui/?v=6&tab=reviews`.
+`https://localhost:8080/?v=6&tab=reviews`.
 
 The **Files** tab browses `/app` on the machine running the API and previews
 text files. Enter a path under `/app`, use the quick jumps (`/app` / model), or
@@ -62,7 +62,7 @@ click through folders; navigating above `/app` is blocked by the server. Locked
 entries (private keys, binaries) show a reason on a second line while their
 size stays on the first line, even in narrow windows. Clicking a file in the sidebar's **Model files** list opens it
 directly in this tab. Open it with
-`https://localhost:8080/ui/?v=6&tab=files` (the older `view=files` link also
+`https://localhost:8080/?v=6&tab=files` (the older `view=files` link also
 works). See [`GET /files`](api-reference.md#get-files) for the safeguards applied
 to file contents.
 
@@ -87,7 +87,7 @@ go run ./cmd/api -tls-cert certs\api.crt -tls-key certs\api.key
 cd ui
 npm install
 npm run dev
-# open https://localhost:5173/ui/
+# open https://localhost:5173/
 ```
 
 After UI changes, rebuild the assets so the Go process serves them:
@@ -99,8 +99,8 @@ npm run build
 
 After changes to the Go sources, restart the API as well — a running process
 keeps serving the old binary. If the console looks stale after a rebuild, open the
-versioned URL (`https://localhost:8080/ui/?v=6` or
-`https://localhost:5173/ui/?v=6`), which bypasses any cached HTML. The sidebar
+versioned URL (`https://localhost:8080/?v=6` or
+`https://localhost:5173/?v=6`), which bypasses any cached HTML. The sidebar
 shows the current `build N` marker so you can confirm which bundle loaded. The
 UI also shows a readable error instead of a blank page if rendering fails.
 
@@ -118,7 +118,7 @@ thresholds the model uses.
 ## Setup page
 
 The **Setup** screen (top-right button, sidebar link, or the `?view=setup` deep
-link, e.g. `https://localhost:8080/ui/?v=6&view=setup`) edits both the console
+link, e.g. `https://localhost:8080/?v=6&view=setup`) edits both the console
 account and the service configuration:
 
 - **Account** — rename the current user and/or set a new password. Changes apply

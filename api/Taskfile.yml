@@ -106,7 +106,7 @@ tasks:
       - echo "Stopping the containerized API to free port 8080 (if running)"
       - '{{.COMPOSE}} -f docker-compose.yml stop api'
       - task: build
-      - echo "Starting https://localhost:8080/ui/?v=6"
+      - echo "Starting https://localhost:8080/?v=6"
       - './{{.BIN}} -python python -model {{.MODEL}} -worker {{.WORKER}} {{.TLS_ARGS}}'
 
   dev:

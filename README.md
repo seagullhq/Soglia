@@ -61,8 +61,8 @@ task build        # build the UI and the Go binary
 task up           # build and start the full Compose stack
 ```
 
-The console is served at <https://localhost:8080/ui/?v=6>. For frontend work,
-`task dev` starts the Vite HTTPS dev server at <https://localhost:5173/ui/?v=6>.
+The console is served at <https://localhost:8080/?v=6>. For frontend work,
+`task dev` starts the Vite HTTPS dev server at <https://localhost:5173/?v=6>.
 
 ## Documentation
 

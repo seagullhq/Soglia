@@ -3,9 +3,10 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Built assets are served by the Go API under /ui/. In dev, Vite proxies API
-// calls to the Go server over HTTPS. The local CA is self-signed, so the proxy
-// must skip verification (secure: false) — this is a development-only setting.
+// Built assets and the dev server both serve the console at the site root.
+// In dev, Vite proxies API calls to the Go server over HTTPS. The local CA is
+// self-signed, so the proxy must skip verification (secure: false) — this is a
+// development-only setting.
 function readCert(name: string) {
   try {
     return readFileSync(fileURLToPath(new URL(`../certs/${name}`, import.meta.url)))
@@ -19,7 +20,7 @@ const key = readCert('api.key')
 const apiProxy = { target: 'https://127.0.0.1:8080', secure: false }
 
 export default defineConfig({
-  base: '/ui/',
+  base: '/',
   plugins: [react()],
   server: {
     port: 5173,

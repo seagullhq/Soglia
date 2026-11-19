@@ -13,7 +13,7 @@ Copy-Item .env.example .env           # then set a strong SOGLIA_PASSWORD
 docker compose up -d --build          # or: podman compose up -d --build
 ```
 
-Open `https://localhost:8080/ui/?v=6`. A local `.env` already exists with the
+Open `https://localhost:8080/?v=6`. A local `.env` already exists with the
 current credentials. Stop the local API/Postgres first — Compose publishes
 `8080` and uses the same certs.
 
