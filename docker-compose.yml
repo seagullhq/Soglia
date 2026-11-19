@@ -49,11 +49,6 @@ services:
     volumes:
       - ../files/v6:/app/v6:ro
       - soglia-settings:/app/settings
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
 
 volumes:
   pg-data:
