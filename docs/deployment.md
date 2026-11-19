@@ -38,3 +38,39 @@ docker compose logs -f api
 docker compose down        # stop, keep data
 docker compose down -v     # stop and delete data/cert volumes
 ```
+
+## Dokploy
+
+Use the compose file at the repository root, `docker-compose.yml`. Dokploy looks
+for `./docker-compose.yml` by default; `api/docker-compose.yml` is the local
+stack and expects generated certificates plus a local `.env`, so it is not
+usable from a fresh clone.
+
+The root compose file differs in three ways:
+
+- `api/Dockerfile.dokploy` builds the UI from source (no committed `ui/dist`)
+  and does not copy `v6` into the image (the model is mounted at runtime).
+- The API serves plain HTTP on `:8080`; Traefik terminates public TLS and
+  issues the Let's Encrypt certificate. `-secure-cookie` is passed on the
+  command line because the app cannot see the proxy's TLS connection.
+- PostgreSQL runs inside the Compose project with `sslmode=disable` on the
+  internal Docker network. Use `SOGLIA_DATABASE_URL` from Dokploy's environment
+  instead if you prefer a managed database.
+
+Before the first deploy, create the model directory on the host and copy the
+`v6` files there (`model_int8.onnx`, `tokenizer.json`, `calibration.json`,
+`clean_blocklist.txt` are required; `config.json` and the larger files are
+optional but feed the UI's file sizes):
+
+```bash
+mkdir -p /srv/soglia/v6
+# rsync -avP /path/to/v6/ root@SERVER:/srv/soglia/v6/
+chmod -R a+rX /srv/soglia/v6
+```
+
+In Dokploy: create a **Compose** service pointing at the Git repo, leave the
+compose path as `./docker-compose.yml`, set `SOGLIA_USER`, `SOGLIA_PASSWORD`
+and `POSTGRES_PASSWORD` in the Environment tab, add the domain on port `8080`
+with HTTPS enabled, then deploy. Settings edited from the Setup page persist
+in the `soglia-settings` volume. Keep `POSTGRES_PASSWORD` URL-safe (letters
+and digits) because it is interpolated into the connection URL.

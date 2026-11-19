@@ -1,0 +1,49 @@
+# Dokploy deployment: Traefik terminates TLS, the API serves HTTP on :8080.
+# Set SOGLIA_PASSWORD, POSTGRES_PASSWORD and SOGLIA_USER in Dokploy's Environment tab.
+# Upload the v6 model to /srv/soglia/v6 on the host before the first deploy.
+
+name: soglia
+
+services:
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: soglia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in Dokploy}
+      POSTGRES_DB: soglia
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soglia -d soglia"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile.dokploy
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SOGLIA_USER: ${SOGLIA_USER:-admin}
+      SOGLIA_PASSWORD: ${SOGLIA_PASSWORD:?set SOGLIA_PASSWORD in Dokploy}
+      SOGLIA_DATABASE_URL: postgres://soglia:${POSTGRES_PASSWORD}@postgres:5432/soglia?sslmode=disable
+      SOGLIA_SETTINGS: /app/settings/settings.json
+    expose:
+      - "8080"
+    volumes:
+      - /srv/soglia/v6:/app/v6:ro
+      - soglia-settings:/app/settings
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pg-data:
+  soglia-settings:
