@@ -18,8 +18,8 @@ certificate verification.
 - **Review desk** — a queue for borderline cases with allow/block decisions,
   notes, and the ability to change or undo a decision.
 - **Insights** — live stats, check history, and per-tier breakdowns.
-- **Operations** — a table browser with admin-only SQL queries and deletes, an
-  opt-in read-only diagnostic terminal, and a file browser confined to `/app`
+- **Operations** — a table browser with admin-only SQL queries and deletes, a
+  read-only diagnostic terminal, and a file browser confined to `/app`
   (private keys and binaries are locked).
 - **Multi-user access control** — Admin / Moderator / Viewer roles with fixed
   permissions enforced server-side on every route, HttpOnly sessions in

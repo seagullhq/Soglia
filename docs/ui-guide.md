@@ -73,11 +73,11 @@ directly in this tab. Open it with
 works). See [`GET /files`](api-reference.md#get-files) for the safeguards applied
 to file contents.
 
-The **Terminal** button in the top bar appears only when the API has been
-started with the diagnostic terminal enabled; by default the endpoint does not
-exist and the button is hidden. When enabled, it opens a fixed-size modal for
-**read-only** diagnostics: a small allow-list of system utilities, no shell, no
-pipes or redirects, and file access confined to `/app`. You cannot edit files,
+The **Terminal** button in the top bar is available by default for admins (it
+can be switched off in **Setup**) and opens a fixed-size modal for **read-only**
+diagnostics: a small allow-list of
+system utilities, no shell, no pipes or redirects, and file access confined to
+`/app`. You cannot edit files,
 install packages or control Docker from it. `cd` persists between commands and
 ↑ / ↓ walks command history (kept across modal reopens and page reloads).
 `clear` / `cls` or Ctrl+L empties the output, Ctrl+C stops a running command (or
@@ -143,10 +143,19 @@ account and the service configuration:
   your own account. The **main admin** (the bootstrap account, id 1) is marked
   in the list; its password is owned by `SOGLIA_PASSWORD` and cannot be reset
   from this panel — set the env var and restart instead.
-- **Database / Service** — edit the PostgreSQL URL, Python executable, worker
-  path, model directory, and secure-cookie flag. These are written to
-  `settings.json` and take effect after the API is restarted (the page shows a
-  "Restart needed" status until then).
+- **Database / Service** — edit the PostgreSQL URL, listen address, TLS
+  certificate and key paths, Python executable, worker path, model directory,
+  secure-cookie flag and the terminal on/off switch. TLS paths must be set
+  together or left both blank; the terminal is on by default.
+- **Model thresholds** — override the temperature and the review/block
+  thresholds from `calibration.json` without editing the model directory.
+
+All service settings are written to `settings.json` and take effect after the
+API is restarted (the page shows a "Restart needed" status until then).
+**Restore defaults** clears those stored settings: paths and the terminal fall
+back to their startup defaults, thresholds return to the values in
+`calibration.json`, and accounts/users are left untouched. An API restart is
+needed afterwards.
 
 The database password is masked as `********`; submitting it unchanged keeps the
 stored password. Saving only service settings does not sign you out.

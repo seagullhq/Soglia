@@ -145,28 +145,53 @@ Returns the current account and service settings (protected):
     "model_dir": "C:\\...\\v6",
     "python": "python",
     "worker": "C:\\...\\worker.py",
-    "secure_cookie": true
+    "secure_cookie": true,
+    "addr": ":8080",
+    "tls_cert": "/app/certs/api.crt",
+    "tls_key": "/app/certs/api.key",
+    "terminal_enabled": true,
+    "temperature": 1.0,
+    "block_threshold": 0.65,
+    "review_threshold": 0.6
   },
   "status": {
     "settings_file": "settings.json",
     "database": "connected",
     "model_dir_exists": true,
     "worker_exists": true,
+    "https": true,
     "restart_required": false
   }
 }
 ```
 
-The database password is masked as `********`.
+The database password is masked as `********`. The temperature and thresholds
+are the effective values after any Setup overrides are applied.
 
 ### `PUT /setup`
 
 Accepts any subset of `username`, `password`, `database_url`, `model_dir`,
-`python`, `worker`, and `secure_cookie` and returns
-`{"ok":true,"settings_changed":...,"account_changed":...}`. Account changes
-apply immediately (setting a password signs the user out); service settings are
-written to `settings.json` and require an API restart. Submitting the
-`********` mask as `database_url` keeps the existing password.
+`python`, `worker`, `secure_cookie`, `addr`, `tls_cert`, `tls_key`,
+`terminal_enabled`, `temperature`, `block_threshold`, and `review_threshold`
+and returns `{"ok":true,"settings_changed":...,"account_changed":...}`. Account
+changes apply immediately (setting a password signs the user out); service
+settings are written to `settings.json` and require an API restart. Submitting
+the `********` mask as `database_url` keeps the existing password.
+
+TLS certificate and key paths must be set together or left both blank. The
+listen address must be `host:port`. Temperature must be greater than 0 (and at
+most 100); thresholds must be between 0 and 1. Setting `terminal_enabled` to
+`false` unregisters the terminal routes on the next restart; omitting it keeps
+the default (enabled).
+
+### `POST /setup/reset`
+
+Clears every stored service setting, returning
+`{"ok":true,"settings_changed":true}`. Startup then falls back to its flags,
+environment variables, auto-detected paths and the model's `calibration.json`
+(thresholds return to their calibrated values and the terminal returns to on).
+Console accounts and users are not affected. An API restart is needed for the
+defaults to take effect. Requires the `setup` permission (admin only).
 
 ### User management (`/users`, admin only)
 
@@ -234,11 +259,12 @@ Safeguards, because this endpoint can read anything the API process can:
 
 ### `POST /terminal`
 
-**Disabled by default.** The routes exist only when the API starts with
-`-terminal` or `SOGLIA_TERMINAL_ENABLED=true`; otherwise they return 404. They
-also require the `terminal` permission (admin only) and a valid session. This
-is a read-only diagnostics endpoint, not a shell: it cannot modify the
-container or run arbitrary programs.
+**Enabled by default.** Admins can disable it from the Setup page; the change
+takes effect after an API restart. The `-terminal` flag and
+`SOGLIA_TERMINAL_ENABLED` environment variable override the stored value at
+startup. The routes require the `terminal` permission (admin only) and a valid
+session. This is a read-only diagnostics endpoint, not a shell: it cannot
+modify the container or run arbitrary programs.
 
 ```json
 {"id":"client-generated-id","command":"ls -la","cwd":"/app"}

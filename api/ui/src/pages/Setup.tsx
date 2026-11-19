@@ -4,6 +4,7 @@ import {
   deleteUser,
   fetchSetup,
   fetchUsers,
+  resetSetup,
   updateSetup,
   updateUser,
   type ConsoleUser,
@@ -25,6 +26,13 @@ interface FormState {
   python: string
   worker: string
   secure_cookie: boolean
+  addr: string
+  tls_cert: string
+  tls_key: string
+  terminal_enabled: boolean
+  temperature: number
+  block_threshold: number
+  review_threshold: number
 }
 
 function formFrom(info: SetupInfo): FormState {
@@ -37,6 +45,13 @@ function formFrom(info: SetupInfo): FormState {
     python: info.settings.python,
     worker: info.settings.worker,
     secure_cookie: info.settings.secure_cookie,
+    addr: info.settings.addr,
+    tls_cert: info.settings.tls_cert,
+    tls_key: info.settings.tls_key,
+    terminal_enabled: info.settings.terminal_enabled,
+    temperature: info.settings.temperature,
+    block_threshold: info.settings.block_threshold,
+    review_threshold: info.settings.review_threshold,
   }
 }
 
@@ -306,6 +321,13 @@ export function Setup({ onBack, onAccountChanged }: Props) {
         python: form.python,
         worker: form.worker,
         secure_cookie: form.secure_cookie,
+        addr: form.addr,
+        tls_cert: form.tls_cert,
+        tls_key: form.tls_key,
+        terminal_enabled: form.terminal_enabled,
+        temperature: form.temperature,
+        block_threshold: form.block_threshold,
+        review_threshold: form.review_threshold,
       })
       if (result.account_changed) {
         await onAccountChanged()
@@ -319,6 +341,24 @@ export function Setup({ onBack, onAccountChanged }: Props) {
           ? 'Service settings saved. Restart the API for them to take effect.'
           : 'No changes to save.',
       )
+    } catch (cause) {
+      setError(messageOf(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function restoreDefaults() {
+    if (!window.confirm('Restore all service settings to their defaults? Accounts and users are not affected.')) return
+    setError('')
+    setSaved('')
+    setBusy(true)
+    try {
+      await resetSetup()
+      const fresh = await fetchSetup()
+      setInfo(fresh)
+      setForm(formFrom(fresh))
+      setSaved('Service settings restored to defaults. Restart the API for them to take effect.')
     } catch (cause) {
       setError(messageOf(cause))
     } finally {
@@ -404,6 +444,10 @@ export function Setup({ onBack, onAccountChanged }: Props) {
                 </div>
                 <div className="setup-grid">
                   <label>
+                    <span>Listen address</span>
+                    <input className="mono" value={form.addr} onChange={(e) => field('addr', e.target.value)} required />
+                  </label>
+                  <label>
                     <span>Python executable</span>
                     <input className="mono" value={form.python} onChange={(e) => field('python', e.target.value)} />
                   </label>
@@ -415,17 +459,83 @@ export function Setup({ onBack, onAccountChanged }: Props) {
                     <span>Model directory</span>
                     <input className="mono" value={form.model_dir} onChange={(e) => field('model_dir', e.target.value)} />
                   </label>
+                  <label>
+                    <span>TLS certificate</span>
+                    <input className="mono" value={form.tls_cert} onChange={(e) => field('tls_cert', e.target.value)} />
+                  </label>
+                  <label>
+                    <span>TLS private key</span>
+                    <input className="mono" value={form.tls_key} onChange={(e) => field('tls_key', e.target.value)} />
+                  </label>
                   <label className="setup-check">
                     <input type="checkbox" checked={form.secure_cookie} onChange={(e) => field('secure_cookie', e.target.checked)} />
                     <span>Secure cookie (only when serving over HTTPS)</span>
                   </label>
+                  <label className="setup-check">
+                    <input type="checkbox" checked={form.terminal_enabled} onChange={(e) => field('terminal_enabled', e.target.checked)} />
+                    <span>Diagnostic terminal (read-only, admins only)</span>
+                  </label>
                 </div>
+                <p className="setup-note">
+                  Set both TLS paths to serve HTTPS, or leave both blank for HTTP. The address and TLS
+                  settings, like the terminal switch, take effect after the API is restarted.
+                </p>
+              </section>
+
+              <section className="setup-card">
+                <div className="setup-card-head">
+                  <h2>Model thresholds</h2>
+                  <span>applies after restart</span>
+                </div>
+                <div className="setup-grid">
+                  <label>
+                    <span>Temperature</span>
+                    <input
+                      type="number"
+                      className="mono"
+                      min="0.01"
+                      max="100"
+                      step="0.01"
+                      value={form.temperature}
+                      onChange={(e) => field('temperature', e.target.value === '' ? 0 : Number(e.target.value))}
+                    />
+                  </label>
+                  <label>
+                    <span>Review threshold</span>
+                    <input
+                      type="number"
+                      className="mono"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={form.review_threshold}
+                      onChange={(e) => field('review_threshold', e.target.value === '' ? 0 : Number(e.target.value))}
+                    />
+                  </label>
+                  <label>
+                    <span>Block threshold</span>
+                    <input
+                      type="number"
+                      className="mono"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={form.block_threshold}
+                      onChange={(e) => field('block_threshold', e.target.value === '' ? 0 : Number(e.target.value))}
+                    />
+                  </label>
+                </div>
+                <p className="setup-note">
+                  These override the values in <code>calibration.json</code>. Thresholds are
+                  probabilities between 0 and 1; temperature must be greater than 0.
+                </p>
               </section>
 
               <section className="setup-card setup-status">
                 <div className="setup-card-head"><h2>Status</h2></div>
                 <dl className="setup-status-grid">
                   <div><dt>Database</dt><dd>{info.status.database}</dd></div>
+                  <div><dt>HTTPS</dt><dd>{info.status.https ? 'on' : 'off'}</dd></div>
                   <div><dt>Model directory</dt><dd>{info.status.model_dir_exists ? 'found' : 'missing'}</dd></div>
                   <div><dt>Worker</dt><dd>{info.status.worker_exists ? 'found' : 'missing'}</dd></div>
                   <div><dt>Restart needed</dt><dd>{info.status.restart_required ? 'yes' : 'no'}</dd></div>
@@ -437,6 +547,9 @@ export function Setup({ onBack, onAccountChanged }: Props) {
             <UsersPanel onChanged={onAccountChanged} />
 
             <div className="setup-actions">
+              <button type="button" className="ghost-button setup-reset" disabled={busy} onClick={() => void restoreDefaults()}>
+                Restore defaults
+              </button>
               <button type="button" className="ghost-button" onClick={onBack}>Cancel</button>
               <button type="submit" form="setup-form" className="primary-button" disabled={busy}>
                 {busy ? 'Saving…' : 'Save setup'}

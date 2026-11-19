@@ -15,6 +15,7 @@ attribution), so callers always get the offending word on block/review.
 """
 
 import json
+import math
 import os
 import re
 import sys
@@ -42,6 +43,38 @@ MODEL_DIR = resolve_model_dir()
 
 with open(os.path.join(MODEL_DIR, "calibration.json"), "r", encoding="utf-8") as f:
     CAL = json.load(f)
+
+
+def apply_calibration_overrides(raw):
+    """Merge Setup-page overrides over the values from calibration.json."""
+    if not raw:
+        return
+    try:
+        overrides = json.loads(raw)
+    except ValueError:
+        print("Ignoring invalid calibration overrides", file=sys.stderr, flush=True)
+        return
+    for key in ("temperature", "block_threshold", "review_threshold"):
+        if key not in overrides:
+            continue
+        try:
+            value = float(overrides[key])
+        except (TypeError, ValueError):
+            print(f"Ignoring invalid calibration override for {key}", file=sys.stderr, flush=True)
+            continue
+        if not math.isfinite(value) or value <= 0 or (key != "temperature" and value > 1):
+            print(f"Ignoring out-of-range calibration override for {key}", file=sys.stderr, flush=True)
+            continue
+        CAL[key] = value
+
+
+apply_calibration_overrides(sys.argv[2] if len(sys.argv) > 2 else None)
+print(
+    f"Calibration: temperature={CAL['temperature']}, "
+    f"review={CAL['review_threshold']}, block={CAL['block_threshold']}",
+    file=sys.stderr,
+    flush=True,
+)
 
 with open(os.path.join(MODEL_DIR, "clean_blocklist.txt"), "r", encoding="utf-8") as f:
     BLOCKLIST = set(line.strip() for line in f if line.strip())

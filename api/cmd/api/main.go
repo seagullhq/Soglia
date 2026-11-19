@@ -28,7 +28,7 @@ func main() {
 	}
 	config.EnsureSettingsFile(opts)
 
-	client, err := worker.NewClient(opts.Python, opts.Worker, opts.ModelDir)
+	client, err := worker.NewClient(opts.Python, opts.Worker, opts.ModelDir, opts.CalibrationOverride)
 	if err != nil {
 		slog.Error("could not start inference worker", "error", err)
 		os.Exit(1)

@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"profanity-filter-api/internal/model"
 )
 
 // Options is the resolved server configuration. Flags and environment
@@ -25,9 +27,14 @@ type Options struct {
 	SecureCookie bool
 	TLSCert      string
 	TLSKey       string
-	// TerminalEnabled opts into the read-only diagnostic terminal. Off by default:
-	// an operator must explicitly enable it with -terminal or SOGLIA_TERMINAL_ENABLED.
+
+	// TerminalEnabled controls whether the read-only diagnostic terminal is
+	// registered. Settings can disable it; the default is enabled.
 	TerminalEnabled bool
+
+	// CalibrationOverride holds any thresholds set from the Setup page. Nil
+	// fields fall back to the model's calibration.json.
+	model.CalibrationOverride
 }
 
 func (o Options) TLSEnabled() bool {
@@ -74,16 +81,21 @@ func EnvBool(key string, fallback bool) bool {
 func ParseOptions() Options {
 	var opts Options
 	saved := LoadSettings()
-	flag.StringVar(&opts.Addr, "addr", ":8080", "listen address (e.g. :8080 or 127.0.0.1:8080)")
+	terminalDefault := true
+	if saved.TerminalEnabled != nil {
+		terminalDefault = *saved.TerminalEnabled
+	}
+	opts.CalibrationOverride = saved.CalibrationOverride
+	flag.StringVar(&opts.Addr, "addr", OrDefault(saved.Addr, ":8080"), "listen address (e.g. :8080 or 127.0.0.1:8080)")
 	flag.StringVar(&opts.Python, "python", OrDefault(saved.Python, "python"), "Python executable that has onnxruntime, tokenizers and numpy")
 	flag.StringVar(&opts.Worker, "worker", saved.Worker, "path to worker.py (auto-detected when empty)")
 	flag.StringVar(&opts.ModelDir, "model", saved.ModelDir, "model directory containing v6 files (auto-detected when empty)")
 	flag.StringVar(&opts.DBURL, "db-url", EnvOr("SOGLIA_DATABASE_URL", EnvOr("DATABASE_URL", OrDefault(saved.DatabaseURL, "postgres://soglia:soglia@localhost:5432/soglia?sslmode=verify-full&sslrootcert=certs/ca.crt"))),
 		"PostgreSQL connection URL (or set DATABASE_URL / SOGLIA_DATABASE_URL)")
 	flag.BoolVar(&opts.SecureCookie, "secure-cookie", saved.SecureCookie, "add Secure to session cookies (automatic when HTTPS is enabled)")
-	flag.BoolVar(&opts.TerminalEnabled, "terminal", EnvBool("SOGLIA_TERMINAL_ENABLED", false), "enable the read-only diagnostic terminal (off by default)")
-	flag.StringVar(&opts.TLSCert, "tls-cert", EnvOr("SOGLIA_TLS_CERT", ""), "TLS certificate file; together with -tls-key enables HTTPS")
-	flag.StringVar(&opts.TLSKey, "tls-key", EnvOr("SOGLIA_TLS_KEY", ""), "TLS private key file; together with -tls-cert enables HTTPS")
+	flag.BoolVar(&opts.TerminalEnabled, "terminal", EnvBool("SOGLIA_TERMINAL_ENABLED", terminalDefault), "enable the read-only diagnostic terminal (on by default)")
+	flag.StringVar(&opts.TLSCert, "tls-cert", EnvOr("SOGLIA_TLS_CERT", saved.TLSCert), "TLS certificate file; together with -tls-key enables HTTPS")
+	flag.StringVar(&opts.TLSKey, "tls-key", EnvOr("SOGLIA_TLS_KEY", saved.TLSKey), "TLS private key file; together with -tls-cert enables HTTPS")
 	flag.Parse()
 
 	cwd, _ := os.Getwd()
@@ -181,11 +193,16 @@ func FirstExistingDir(candidates ...string) string {
 // AppSettings is the small file-backed configuration the Setup page can edit.
 // Explicit flags/env vars still take precedence when the API starts.
 type AppSettings struct {
-	DatabaseURL  string `json:"database_url"`
-	ModelDir     string `json:"model_dir"`
-	Python       string `json:"python"`
-	Worker       string `json:"worker"`
-	SecureCookie bool   `json:"secure_cookie"`
+	DatabaseURL     string `json:"database_url"`
+	ModelDir        string `json:"model_dir"`
+	Python          string `json:"python"`
+	Worker          string `json:"worker"`
+	SecureCookie    bool   `json:"secure_cookie"`
+	Addr            string `json:"addr"`
+	TLSCert         string `json:"tls_cert"`
+	TLSKey          string `json:"tls_key"`
+	TerminalEnabled *bool  `json:"terminal_enabled,omitempty"`
+	model.CalibrationOverride
 }
 
 const MaskedSecret = "********"
@@ -223,12 +240,18 @@ func EnsureSettingsFile(opts Options) {
 	if _, err := os.Stat(SettingsFilePath()); err == nil {
 		return
 	}
+	terminal := opts.TerminalEnabled
 	settings := AppSettings{
-		DatabaseURL:  opts.DBURL,
-		ModelDir:     opts.ModelDir,
-		Python:       opts.Python,
-		Worker:       opts.Worker,
-		SecureCookie: opts.SecureCookie,
+		DatabaseURL:         opts.DBURL,
+		ModelDir:            opts.ModelDir,
+		Python:              opts.Python,
+		Worker:              opts.Worker,
+		SecureCookie:        opts.SecureCookie,
+		Addr:                opts.Addr,
+		TLSCert:             opts.TLSCert,
+		TLSKey:              opts.TLSKey,
+		TerminalEnabled:     &terminal,
+		CalibrationOverride: opts.CalibrationOverride,
 	}
 	if err := SaveSettings(settings); err != nil {
 		slog.Warn("could not create settings file", "error", err)
@@ -251,13 +274,18 @@ func MaskDSN(dsn string) string {
 
 // SetupUpdate is the request body accepted by PUT /setup.
 type SetupUpdate struct {
-	Username     string `json:"username,omitempty"`
-	Password     string `json:"password,omitempty"`
-	DatabaseURL  string `json:"database_url,omitempty"`
-	ModelDir     string `json:"model_dir,omitempty"`
-	Python       string `json:"python,omitempty"`
-	Worker       string `json:"worker,omitempty"`
-	SecureCookie *bool  `json:"secure_cookie,omitempty"`
+	Username        string  `json:"username,omitempty"`
+	Password        string  `json:"password,omitempty"`
+	DatabaseURL     string  `json:"database_url,omitempty"`
+	ModelDir        string  `json:"model_dir,omitempty"`
+	Python          string  `json:"python,omitempty"`
+	Worker          string  `json:"worker,omitempty"`
+	SecureCookie    *bool   `json:"secure_cookie,omitempty"`
+	Addr            *string `json:"addr,omitempty"`
+	TLSCert         *string `json:"tls_cert,omitempty"`
+	TLSKey          *string `json:"tls_key,omitempty"`
+	TerminalEnabled *bool   `json:"terminal_enabled,omitempty"`
+	model.CalibrationOverride
 }
 
 func PathExists(path string) bool {

@@ -51,9 +51,15 @@ type Client struct {
 	exitErr error
 }
 
-// NewClient starts the worker and begins reading its responses.
-func NewClient(python, worker, modelDir string) (*Client, error) {
-	cmd := exec.Command(python, worker, modelDir)
+// NewClient starts the worker and begins reading its responses. Calibration
+// overrides are passed as an optional third argument and merged by worker.py
+// over the values loaded from calibration.json.
+func NewClient(python, worker, modelDir string, override model.CalibrationOverride) (*Client, error) {
+	args := []string{worker, modelDir}
+	if data, err := json.Marshal(override); err == nil && string(data) != "{}" {
+		args = append(args, string(data))
+	}
+	cmd := exec.Command(python, args...)
 	cmd.Stderr = os.Stderr // Python diagnostics must never mix with stdout JSON
 
 	stdin, err := cmd.StdinPipe()

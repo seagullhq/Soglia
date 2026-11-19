@@ -16,6 +16,7 @@ import (
 	"profanity-filter-api/internal/auth"
 	"profanity-filter-api/internal/config"
 	"profanity-filter-api/internal/httpx"
+	"profanity-filter-api/internal/model"
 	"profanity-filter-api/internal/store"
 	"profanity-filter-api/internal/worker"
 )
@@ -28,9 +29,9 @@ type api struct {
 	store  *store.Store
 	auth   *auth.Manager
 
-	// Terminal state is only used when the opt-in diagnostic terminal is
-	// enabled. Commands are bound to the session that started them, and usage
-	// is tracked per session so one account cannot monopolise the endpoint.
+	// Terminal state tracks the read-only diagnostic terminal. Commands are
+	// bound to the session that started them, and usage is tracked per session
+	// so one account cannot monopolise the endpoint.
 	terminalMu      sync.Mutex
 	terminalRunning map[string]runningTerminal // session\x00client id -> command
 	terminalActive  map[string]int             // session -> running commands
@@ -43,7 +44,7 @@ func New(w *worker.Client, opts config.Options, db *store.Store, mgr *auth.Manag
 	app := &api{
 		worker:          w,
 		opts:            opts,
-		model:           loadModelConfig(opts.ModelDir),
+		model:           loadModelConfig(opts.ModelDir, opts.CalibrationOverride),
 		store:           db,
 		auth:            mgr,
 		terminalRunning: make(map[string]runningTerminal),
@@ -65,6 +66,7 @@ func New(w *worker.Client, opts config.Options, db *store.Store, mgr *auth.Manag
 	mux.Handle("/db/table", mgr.RequirePerm(auth.PermDB, http.HandlerFunc(app.handleDBTable)))
 	mux.Handle("/db/query", mgr.RequirePerm(auth.PermDB, http.HandlerFunc(app.handleDBQuery)))
 	mux.Handle("/setup", mgr.RequirePerm(auth.PermSetup, http.HandlerFunc(app.handleSetup)))
+	mux.Handle("/setup/reset", mgr.RequirePerm(auth.PermSetup, http.HandlerFunc(app.handleSetupReset)))
 	mux.Handle("/users", mgr.RequirePerm(auth.PermUsers, http.HandlerFunc(app.handleUsers)))
 	// Accept both /files and /files/ so a stray trailing slash cannot fall
 	// through to the root handler and surface as a 404 in the console.
@@ -75,11 +77,10 @@ func New(w *worker.Client, opts config.Options, db *store.Store, mgr *auth.Manag
 		mux.Handle("/terminal/cancel", mgr.RequirePerm(auth.PermTerminal, http.HandlerFunc(app.handleTerminalCancel)))
 		slog.Info("diagnostic terminal enabled", "mode", "read-only allow-list")
 	} else {
-		// Register explicit 404s so POSTs cannot fall through to the UI's
-		// catch-all handler and report a misleading 405.
+		// Explicit 404s stop POSTs falling through to the UI catch-all handler.
 		mux.Handle("/terminal", http.NotFoundHandler())
 		mux.Handle("/terminal/cancel", http.NotFoundHandler())
-		slog.Info("diagnostic terminal disabled", "enable_with", "SOGLIA_TERMINAL_ENABLED=true")
+		slog.Info("diagnostic terminal disabled")
 	}
 	mux.Handle("/moderate", mgr.RequirePerm(auth.PermModerate, http.HandlerFunc(app.handleModerate)))
 	mux.Handle("/moderate/batch", mgr.RequirePerm(auth.PermModerate, http.HandlerFunc(app.handleBatch)))
@@ -168,7 +169,7 @@ func (a *api) handleConfig(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusMethodNotAllowed, "GET required")
 		return
 	}
-	// Copy so the opt-in flag can be reported without mutating the shared config.
+	// Copy so the reported flags do not mutate the shared model config.
 	response := *a.model
 	response.TerminalEnabled = a.opts.TerminalEnabled
 	httpx.WriteJSON(w, http.StatusOK, response)
@@ -201,7 +202,7 @@ type modelConfig struct {
 	Files           []modelFile  `json:"files"`
 }
 
-func loadModelConfig(dir string) *modelConfig {
+func loadModelConfig(dir string, override model.CalibrationOverride) *modelConfig {
 	// MaxTokens mirrors tokenizer.enable_truncation(max_length=64) in worker.py.
 	cfg := &modelConfig{ModelDir: dir, MaxTokens: 64}
 
@@ -216,6 +217,15 @@ func loadModelConfig(dir string) *modelConfig {
 			cfg.BlockThreshold = raw.BlockThreshold
 			cfg.ReviewThreshold = raw.ReviewThreshold
 		}
+	}
+	if override.Temperature != nil {
+		cfg.Temperature = *override.Temperature
+	}
+	if override.BlockThreshold != nil {
+		cfg.BlockThreshold = *override.BlockThreshold
+	}
+	if override.ReviewThreshold != nil {
+		cfg.ReviewThreshold = *override.ReviewThreshold
 	}
 
 	if data, err := os.ReadFile(filepath.Join(dir, "config.json")); err == nil {

@@ -222,12 +222,20 @@ export interface SetupInfo {
     python: string
     worker: string
     secure_cookie: boolean
+    addr: string
+    tls_cert: string
+    tls_key: string
+    terminal_enabled: boolean
+    temperature: number
+    block_threshold: number
+    review_threshold: number
   }
   status: {
     settings_file: string
     database: string
     model_dir_exists: boolean
     worker_exists: boolean
+    https: boolean
     restart_required: boolean
   }
 }
@@ -240,6 +248,13 @@ export interface SetupUpdate {
   python?: string
   worker?: string
   secure_cookie?: boolean
+  addr?: string
+  tls_cert?: string
+  tls_key?: string
+  terminal_enabled?: boolean
+  temperature?: number
+  block_threshold?: number
+  review_threshold?: number
 }
 
 export interface SetupResult {
@@ -250,6 +265,7 @@ export interface SetupResult {
 
 export const fetchSetup = () => getJSON<SetupInfo>('/setup')
 export const updateSetup = (update: SetupUpdate) => putJSON<SetupResult>('/setup', update)
+export const resetSetup = () => postJSON<SetupResult>('/setup/reset', {})
 
 export interface FileEntry {
   name: string

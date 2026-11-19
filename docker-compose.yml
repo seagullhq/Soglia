@@ -44,9 +44,6 @@ services:
       SOGLIA_PASSWORD: ${SOGLIA_PASSWORD:?set SOGLIA_PASSWORD in Dokploy}
       SOGLIA_DATABASE_URL: postgres://soglia:${POSTGRES_PASSWORD}@postgres:5432/soglia?sslmode=disable
       SOGLIA_SETTINGS: /app/settings/settings.json
-      # Read-only diagnostic terminal, off by default. Enable temporarily for
-      # troubleshooting only, then redeploy with it disabled again.
-      # SOGLIA_TERMINAL_ENABLED: "false"
     expose:
       - "8080"
     volumes:
