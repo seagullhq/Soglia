@@ -1,0 +1,80 @@
+# Full Soglia stack: PostgreSQL over TLS + the Go API over HTTPS.
+# Run from this directory:  docker compose up -d --build
+# Requires certs generated first:  go run ./cmd/gen-certs certs
+name: soglia
+
+services:
+  # Postgres requires its private key to be owned by uid 70 with mode 0600.
+  # A bind mount would be owned by root, so copy the generated certs into a
+  # named volume with the correct ownership before Postgres starts.
+  cert-init:
+    image: docker.io/library/postgres:16-alpine
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        cp /src/*.crt /src/*.key /certs/ &&
+        chown -R 70:0 /certs &&
+        chmod 600 /certs/*.key &&
+        chmod 644 /certs/*.crt
+    volumes:
+      - ./certs:/src:ro
+      - pg-certs:/certs
+
+  soglia-postgres:
+    image: docker.io/library/postgres:16-alpine
+    depends_on:
+      cert-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: soglia
+      POSTGRES_PASSWORD: soglia
+      POSTGRES_DB: soglia
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - pg-certs:/certs:ro
+    ports:
+      # Loopback only: lets `task run` use the local binary against this same DB.
+      - "127.0.0.1:5432:5432"
+    command:
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/certs/postgres.crt
+      - -c
+      - ssl_key_file=/certs/postgres.key
+      - -c
+      - ssl_ca_file=/certs/ca.crt
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soglia -d soglia"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    depends_on:
+      soglia-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SOGLIA_USER: ${SOGLIA_USER:-admin}
+      SOGLIA_PASSWORD: ${SOGLIA_PASSWORD:?set SOGLIA_PASSWORD in api/.env}
+      SOGLIA_SETTINGS: /app/settings/settings.json
+      SOGLIA_DATABASE_URL: "postgres://soglia:soglia@soglia-postgres:5432/soglia?sslmode=verify-full&sslrootcert=/app/certs/ca.crt"
+      SOGLIA_TLS_CERT: /app/certs/api.crt
+      SOGLIA_TLS_KEY: /app/certs/api.key
+    volumes:
+      - ./certs:/app/certs:ro
+      - api-settings:/app/settings
+
+volumes:
+  pg-data:
+  pg-certs:
+  api-settings:

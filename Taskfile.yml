@@ -1,0 +1,8 @@
+version: '3'
+
+# Root entry point so `task` works from the repository root as well as api/.
+includes:
+  api:
+    dir: api
+    taskfile: api/Taskfile.yml
+    flatten: true

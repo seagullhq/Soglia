@@ -1,0 +1,7 @@
+.git
+**/node_modules
+**/*.exe
+**/soglia.db*
+api/settings.json
+api/certs
+api/.env

@@ -1,0 +1,151 @@
+version: '3'
+
+silent: true
+
+vars:
+  BIN: dist/profanity-api.exe
+  MODEL: ../v6
+  WORKER: worker.py
+  CERTS: certs
+  TLS_ARGS: '-tls-cert {{.CERTS}}/api.crt -tls-key {{.CERTS}}/api.key'
+  # Override with: COMPOSE="docker compose" task up   (or task COMPOSE="..." up)
+  COMPOSE: '{{default "podman compose" .COMPOSE}}'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  certs:
+    desc: Generate the local CA and TLS certificates (only if missing)
+    status:
+      - test -f {{.CERTS}}/ca.crt
+      - test -f {{.CERTS}}/api.crt
+      - test -f {{.CERTS}}/api.key
+      - test -f {{.CERTS}}/postgres.crt
+      - test -f {{.CERTS}}/postgres.key
+    cmds:
+      - echo "Generating certificates in {{.CERTS}}/"
+      - go run ./cmd/gen-certs {{.CERTS}}
+
+  install:
+    desc: Install the UI npm dependencies
+    dir: ui
+    status:
+      - test -d node_modules
+    cmds:
+      - npm install
+
+  ui:
+    desc: Build the React management UI into ui/dist
+    dir: ui
+    deps: [install]
+    sources:
+      - 'src/**/*'
+      - index.html
+      - package.json
+      - package-lock.json
+      - vite.config.ts
+      - tsconfig*.json
+    generates:
+      - dist/**
+    cmds:
+      - echo "Building UI..."
+      - npm run build
+
+  binary:
+    desc: Build only the Go API binary
+    sources:
+      - 'cmd/**/*.go'
+      - 'internal/**/*.go'
+      - go.mod
+      - go.sum
+      - 'internal/store/migrations/*.sql'
+    generates:
+      - '{{.BIN}}'
+    cmds:
+      - echo "Building {{.BIN}}..."
+      - mkdir -p dist
+      - CGO_ENABLED=0 go build -o {{.BIN}} ./cmd/api
+
+  build:
+    desc: Build the API (UI assets + Go binary)
+    cmds:
+      - task: ui
+      - task: binary
+      - echo "Build complete — {{.BIN}} and ui/dist are ready"
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  test:
+    desc: Run Go tests
+    cmds:
+      - go test ./...
+
+  check:
+    desc: Run go vet and go test
+    cmds:
+      - task: vet
+      - task: test
+
+  pg:
+    desc: Start only the Postgres service (for local `task run`)
+    cmds:
+      - task: certs
+      - '{{.COMPOSE}} -f docker-compose.yml up -d soglia-postgres'
+
+  run:
+    desc: Run the API locally over HTTPS on :8080 (uses the Compose Postgres)
+    cmds:
+      - task: certs
+      - task: pg
+      - echo "Stopping the containerized API to free port 8080 (if running)"
+      - '{{.COMPOSE}} -f docker-compose.yml stop api'
+      - task: build
+      - echo "Starting https://localhost:8080/ui/?v=6"
+      - './{{.BIN}} -python python -model {{.MODEL}} -worker {{.WORKER}} {{.TLS_ARGS}}'
+
+  dev:
+    desc: Run the Vite HTTPS dev server on :5173
+    cmds:
+      - task: certs
+      - cmd: npm run dev
+        dir: ui
+
+  image:
+    desc: Build the container image
+    cmds:
+      - task: ui
+      - '{{.COMPOSE}} -f docker-compose.yml build'
+
+  up:
+    desc: Build and start the full Compose stack
+    cmds:
+      - task: ui
+      - '{{.COMPOSE}} -f docker-compose.yml up -d --build'
+
+  down:
+    desc: Stop the Compose stack (keeps the data volumes)
+    cmds:
+      - '{{.COMPOSE}} -f docker-compose.yml down'
+
+  logs:
+    desc: Follow the API container logs
+    cmds:
+      - '{{.COMPOSE}} -f docker-compose.yml logs -f api'
+
+  ps:
+    desc: Show Compose service status
+    cmds:
+      - '{{.COMPOSE}} -f docker-compose.yml ps'
+
+  clean:
+    desc: Remove locally built artifacts
+    cmds:
+      - rm -rf dist
+      - rm -rf ui/dist
+      - echo "Cleaned dist/ and ui/dist"
